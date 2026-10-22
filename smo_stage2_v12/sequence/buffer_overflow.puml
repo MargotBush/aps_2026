@@ -1,0 +1,51 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 85
+title Занятые узлы — постановка в буфер и отказ Д1ОО4
+participant "Движок модели" as E
+participant "Камера" as S
+participant "Диспетчер постановки" as P
+participant "Буфер" as B
+participant "Диспетчер выбора" as D
+participant "Пул узлов" as Pool
+participant "Вычислительный узел" as W
+participant "Календарь" as C
+participant "Статистика" as T
+
+note over Pool,W: Предусловие: все вычислительные узлы заняты.
+E -> S: generate(t)
+S --> E: r
+E -> T: recordGenerated(r)
+E -> P: accept(r, t)
+P -> D: findFree()
+D -> Pool: findFreeRoundRobin()
+Pool --> D: null
+D --> P: null
+
+alt В буфере есть место
+ P -> B: isFull()
+ B --> P: false
+ P -> B: putFirstFree(r, t)
+ B -> B: Найти первый свободный слот от 0 (Д1ОЗ3)
+ B -> B: r.markBuffered(t, nextOrder++)
+ B --> P: номер слота
+else Буфер заполнен
+ P -> B: isFull()
+ B --> P: true
+ P -> B: replaceLatest(r, t)
+ B -> B: k=argmax(slots[k].enqueueOrder) (Д1ОО4)
+ B -> B: old=slots[k]; old.reject(t)
+ B -> B: slots[k]=r; r.markBuffered(t, nextOrder++)
+ B --> P: old
+ P -> T: recordRejected(old, t)
+end
+note over B: Нет сдвига слотов. Указатель чтения q не меняется.
+P --> E: Приём завершён
+note over E,W: Новые поступления продолжаются; обработка уже занятых узлов не прерывается.
+
+@enduml

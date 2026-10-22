@@ -1,0 +1,44 @@
+@startuml
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+title Завершение обработки и выбор по кольцу — вариант 12
+|SimulationEngine|
+start
+:Получено SERVICE_COMPLETED(node,t);
+|ComputeNode|
+:finish(t), освободить узел;
+|Statistics|
+:recordCompleted(request,node,t);
+|SelectionDispatcher|
+:dispatchWaiting(t);
+while (Буфер не пуст?) is (да)
+ |DevicePool|
+ :findFreeRoundRobin() — Д2П2;
+ if (Свободный узел найден?) then (да)
+  :Обновить p=(node+1) mod M;
+  |ImageBuffer|
+  :takeRoundRobin() — Д2Б3;
+  :Найти занятую позицию начиная с q;
+  :Извлечь заявку из слота k,
+q=(k+1) mod B;
+  |SelectionDispatcher|
+  :assign(request,node,t);
+  |ComputeNode|
+  :start(request,t) — ПЗ1;
+  |EventCalendar|
+  :add(SERVICE_COMPLETED);
+  |Statistics|
+  :recordStart(request,node,t);
+  |SelectionDispatcher|
+ else (нет)
+  |SelectionDispatcher|
+  :Пул занят; не менять p,
+прекратить выбор;
+  break
+ endif
+endwhile (нет)
+|SimulationEngine|
+:Вернуться к основному циклу;
+stop
+@enduml

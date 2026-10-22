@@ -1,0 +1,39 @@
+@startuml
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+title Основной цикл календаря событий — вариант 12
+|SimulationEngine|
+start
+:initialize(): задать источники,
+буфер, узлы, p=0, q=0;
+|EventCalendar|
+:Добавить первое ARRIVAL для каждой камеры;
+|SimulationEngine|
+while (Есть события в календаре?) is (да)
+ |EventCalendar|
+ :next(): выбрать минимальное по времени событие;
+ |SimulationEngine|
+ :Установить time = event.time;
+ if (Тип?) then (ARRIVAL)
+  :processArrival(event)
+см. схему 08;
+ else (SERVICE_COMPLETED)
+  :processCompletion(event)
+см. схему 09;
+ endif
+ |Statistics|
+ :Подготовить текущий срез статистики;
+ |ModelView|
+ :Показать календарь, камеры, слоты, узлы,
+p и q; обновить показатели ОД3;
+ |SimulationEngine|
+endwhile (нет)
+|Statistics|
+:summary(time) — статистика по камерам
+и коэффициент загрузки узлов;
+|ModelView|
+:showSummary — ОР1,
+сводные таблицы;
+stop
+@enduml

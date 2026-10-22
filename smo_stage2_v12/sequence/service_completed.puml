@@ -1,0 +1,55 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 85
+title Освобождение узла — выбор заявки и назначение по кольцу
+participant "Движок модели" as E
+participant "Камера" as S
+participant "Диспетчер постановки" as P
+participant "Буфер" as B
+participant "Диспетчер выбора" as D
+participant "Пул узлов" as Pool
+participant "Вычислительный узел" as W
+participant "Календарь" as C
+participant "Статистика" as T
+
+E -> C: next()
+C --> E: SERVICE_COMPLETED(node, t)
+E -> W: finish(t)
+W --> E: rDone
+E -> T: recordCompleted(rDone, node, t)
+E -> D: dispatchWaiting(t)
+loop Пока есть ожидающие заявки и свободные узлы
+ D -> B: isEmpty()
+ B --> D: empty
+ alt Буфер пуст
+  break Завершить выбор без изменения указателей
+   D --> E: Ожидающих заявок нет
+  end
+ else Есть заявки
+  D -> Pool: findFreeRoundRobin()
+  Pool --> D: узел либо null
+  alt Все узлы заняты
+   break Ждать следующего события завершения
+    D --> E: Свободных узлов нет
+   end
+  else Свободный узел найден
+   note over Pool: Д2П2: не более M проверок; p=(i+1) mod M
+   D -> B: takeRoundRobin()
+   B -> B: Найти занятый слот от q по кольцу
+   B -> B: Извлечь r; q=(k+1) mod capacity (Д2Б3)
+   B --> D: r
+   D -> D: assign(r, node, t)
+   D -> W: start(r, t)
+   W --> D: SERVICE_COMPLETED(node, t+Exp(rate)) (ПЗ1)
+   D -> C: add(event)
+   D -> T: recordStart(r, node, t)
+  end
+ end
+end
+
+@enduml

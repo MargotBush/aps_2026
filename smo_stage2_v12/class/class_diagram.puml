@@ -1,0 +1,229 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 85
+title Диаграмма классов модели обработки изображений — вариант 12
+class ImageRequest {
+ - id: long
+ - sourceId: int
+ - imageRef: String
+ - createdAt: double
+ - enqueueOrder: long
+ - bufferedAt: Double
+ - startedAt: Double
+ - finishedAt: Double
+ - status: RequestStatus
+ + markBuffered(t: double, order: long): void
+ + start(t: double): void
+ + complete(t: double): void
+ + reject(t: double): void
+}
+enum RequestStatus {
+ CREATED
+ BUFFERED
+ IN_SERVICE
+ COMPLETED
+ REJECTED
+}
+class CameraSource {
+ - id: int
+ - minInterval: double
+ - maxInterval: double
+ - nextId: long
+ - random: Random
+ + generate(t: double): ImageRequest
+ + nextInterval(): double
+}
+class ImageBuffer {
+ - slots: ImageRequest[]
+ - capacity: int
+ - readPointer: int
+ - nextOrder: long
+ + isEmpty(): boolean
+ + isFull(): boolean
+ + putFirstFree(r: ImageRequest, t: double): int
+ + replaceLatest(r: ImageRequest, t: double): ImageRequest
+ + takeRoundRobin(): ImageRequest
+ + snapshot(): BufferSnapshot
+}
+class PlacementDispatcher {
+ - buffer: ImageBuffer
+ - selection: SelectionDispatcher
+ - stats: Statistics
+ + accept(r: ImageRequest, t: double): void
+}
+class SelectionDispatcher {
+ - buffer: ImageBuffer
+ - pool: DevicePool
+ - calendar: EventCalendar
+ - stats: Statistics
+ + findFree(): ComputeNode
+ + assign(r: ImageRequest, node: ComputeNode, t: double): void
+ + dispatchWaiting(t: double): void
+}
+class DevicePool {
+ - nodes: ComputeNode[]
+ - devicePointer: int
+ + findFreeRoundRobin(): ComputeNode
+ + snapshot(): NodeSnapshot[]
+}
+class ComputeNode {
+ - id: int
+ - current: ImageRequest
+ - finishAt: double
+ - rate: double
+ - random: Random
+ + isFree(): boolean
+ + start(r: ImageRequest, t: double): Event
+ + finish(t: double): ImageRequest
+}
+enum EventType {
+ ARRIVAL
+ SERVICE_COMPLETED
+}
+class Event {
+ - time: double
+ - type: EventType
+ - source: CameraSource
+ - node: ComputeNode
+ - serial: long
+ + getTime(): double
+ + getType(): EventType
+ + getSource(): CameraSource
+ + getNode(): ComputeNode
+}
+class EventCalendar {
+ - events: PriorityQueue<Event>
+ + add(e: Event): void
+ + next(): Event
+ + cancelArrivals(): void
+ + snapshot(): Event[]
+}
+class SimulationEngine {
+ - time: double
+ - generatedLimit: long
+ - generatedCount: long
+ - sources: CameraSource[]
+ - buffer: ImageBuffer
+ - pool: DevicePool
+ - calendar: EventCalendar
+ - placement: PlacementDispatcher
+ - selection: SelectionDispatcher
+ - stats: Statistics
+ - view: ModelView
+ + initialize(): void
+ + step(): boolean
+ + run(): void
+ - process(e: Event): void
+}
+class Statistics {
+ - sourceCounters: Map
+ - waitingMoments: Map
+ - serviceMoments: Map
+ - systemMoments: Map
+ - busyTimes: Map
+ + recordGenerated(r: ImageRequest): void
+ + recordRejected(r: ImageRequest, t: double): void
+ + recordStart(r: ImageRequest, node: ComputeNode, t: double): void
+ + recordCompleted(r: ImageRequest, node: ComputeNode, t: double): void
+ + summary(t: double): Summary
+}
+class ModelView {
+ + showStep(t: double, events: Event[], b: BufferSnapshot, nodes: NodeSnapshot[], stats: Summary): void
+ + showSummary(stats: Summary): void
+}
+class BufferSnapshot <<record>> {
+ - slots: List<BufferSlotSnapshot>
+ - readPointer: int
+}
+class BufferSlotSnapshot <<record>> {
+ - slotIndex: int
+ - requestId: Long
+ - sourceId: Integer
+ - bufferedAt: Double
+}
+class NodeSnapshot <<record>> {
+ - nodeId: int
+ - busy: boolean
+ - requestId: Long
+ - finishAt: Double
+}
+class Summary <<record>> {
+ - sources: List<SourceSummary>
+ - devices: List<DeviceSummary>
+ - simulatedUntil: double
+}
+class SourceSummary <<record>> {
+ - sourceId: int
+ - generated: long
+ - rejected: long
+ - completed: long
+ - rejectionProbability: Double
+ - meanWaiting: Double
+ - meanService: Double
+ - meanSystem: Double
+ - waitingVariance: Double
+ - serviceVariance: Double
+}
+class DeviceSummary <<record>> {
+ - nodeId: int
+ - busyTime: double
+ - utilization: Double
+}
+BufferSnapshot *-- "1..*" BufferSlotSnapshot
+Summary *-- "1..*" SourceSummary
+Summary *-- "1..*" DeviceSummary
+ImageBuffer ..> BufferSnapshot : snapshot()
+DevicePool ..> NodeSnapshot : snapshot()
+Statistics ..> Summary : summary()
+ModelView ..> BufferSnapshot
+ModelView ..> NodeSnapshot
+ModelView ..> Summary
+SimulationEngine *-- EventCalendar
+SimulationEngine *-- "1..*" CameraSource
+SimulationEngine *-- ImageBuffer
+SimulationEngine *-- DevicePool
+SimulationEngine *-- PlacementDispatcher
+SimulationEngine *-- SelectionDispatcher
+SimulationEngine *-- Statistics
+SimulationEngine *-- ModelView
+DevicePool *-- "1..*" ComputeNode
+ImageBuffer o-- "0..capacity" ImageRequest
+ComputeNode --> "0..1" ImageRequest : current
+PlacementDispatcher --> ImageBuffer : buffer
+PlacementDispatcher --> SelectionDispatcher : selection
+PlacementDispatcher --> Statistics : stats
+SelectionDispatcher --> ImageBuffer : buffer
+SelectionDispatcher --> DevicePool : pool
+SelectionDispatcher --> EventCalendar : calendar
+SelectionDispatcher --> Statistics : stats
+Event --> "0..1" CameraSource
+Event --> "0..1" ComputeNode
+Event --> EventType
+ImageRequest --> RequestStatus
+CameraSource ..> ImageRequest : создаёт
+ComputeNode ..> Event : создаёт завершение
+note bottom of ImageBuffer
+ Д1ОЗ3: первая свободная позиция, без сдвига.
+ Д1ОО4: max(enqueueOrder), замена в том же слоте.
+ Д2Б3: поиск от readPointer по кольцу.
+ После выборки readPointer = (slot + 1) mod capacity.
+end note
+note bottom of DevicePool
+ Д2П2: поиск от devicePointer по кольцу.
+ При успешном выборе pointer = (node + 1) mod M.
+ При неуспешном поиске указатель не меняется.
+end note
+note bottom of CameraSource
+ ИБ, ИЗ2: интервалы U(a, b), 0 < a < b.
+end note
+note bottom of ComputeNode
+ ПЗ1: длительность Exp(rate), rate > 0.
+ start возвращает событие, а не ждёт его.
+end note
+
+@enduml

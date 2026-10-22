@@ -1,0 +1,59 @@
+@startuml
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+title Приход заявки, размещение и переполнение — вариант 12
+|SimulationEngine|
+start
+:Получено ARRIVAL(camera,t);
+|CameraSource|
+:generate(t), ИБ / ИЗ2 — U(a,b);
+|Statistics|
+:recordGenerated(request);
+|PlacementDispatcher|
+:accept(request,t);
+|SelectionDispatcher|
+:findFree();
+|DevicePool|
+:findFreeRoundRobin() — Д2П2;
+if (Узел свободен?) then (да)
+ :Сдвинуть p=(node+1) mod M;
+ |SelectionDispatcher|
+ :assign(request,node,t);
+ |ComputeNode|
+ :start(request,t), ПЗ1 — Exp(rate);
+ |EventCalendar|
+ :add(SERVICE_COMPLETED);
+ |Statistics|
+ :recordStart(request,node,t);
+else (нет)
+ |ImageBuffer|
+ if (isFull()?) then (нет)
+  :putFirstFree(request,t) — Д1ОЗ3;
+  :Первый свободный слот от начала,
+без перемещения других заявок;
+ else (да)
+  :replaceLatest(request,t) — Д1ОО4;
+  :Найти максимум enqueueOrder;
+  :Старую заявку пометить REJECTED,
+новую записать в тот же слот;
+  |Statistics|
+  :recordRejected(old,t)
+у источника старой заявки;
+ endif
+endif
+|SimulationEngine|
+if (Общий лимит генерации достигнут?) then (да)
+ |EventCalendar|
+ :cancelArrivals() — убрать будущие ARRIVAL,
+сохранить SERVICE_COMPLETED;
+else (нет)
+ |CameraSource|
+ :nextInterval() — U(a,b);
+ |EventCalendar|
+ :add(ARRIVAL(t+delta,camera));
+endif
+|SimulationEngine|
+:Вернуться к основному циклу;
+stop
+@enduml

@@ -1,0 +1,48 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 85
+title HappyFlow — буфер пуст и есть свободный узел
+participant "Движок модели" as E
+participant "Камера" as S
+participant "Диспетчер постановки" as P
+participant "Буфер" as B
+participant "Диспетчер выбора" as D
+participant "Пул узлов" as Pool
+participant "Вычислительный узел" as W
+participant "Календарь" as C
+participant "Статистика" as T
+E -> S: generate(t)
+S --> E: r
+E -> T: recordGenerated(r)
+E -> P: accept(r, t)
+P -> D: findFree()
+D -> Pool: findFreeRoundRobin()
+Pool --> D: свободный node
+D --> P: свободный node
+
+note over S: ИБ, ИЗ2: следующий интервал U(a,b)
+note over Pool: Д2П2: поиск по кольцу; p=(найденный+1) mod M
+alt Найден свободный узел
+P -> D: assign(r, node, t)
+D -> W: start(r, t)
+W --> D: событие SERVICE_COMPLETED
+D -> C: add(event)
+D -> T: recordStart(r, node, t)
+
+note over W: ПЗ1: finishAt=t+Exp(rate)
+note over P,B: Заявка передаётся сразу на узел согласно маппингу.
+end
+P --> E: accept завершён
+E -> S: nextInterval()
+S --> E: delta > 0
+E -> C: add(ARRIVAL(t + delta, source))
+E -> C: next()
+C --> E: ближайшее событие
+note over E,C: Завершение обслуживания обрабатывается только в своё модельное время.
+
+@enduml

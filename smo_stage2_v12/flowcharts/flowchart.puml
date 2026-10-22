@@ -1,0 +1,101 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName DejaVu Sans
+skinparam shadowing false
+skinparam wrapWidth 170
+skinparam backgroundColor white
+skinparam classAttributeIconSize 0
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 85
+title Flowchart с дорожками — вариант 12
+|Движок модели|
+start
+:Инициализировать N камер, M узлов, B слотов,
+p=0, q=0, запланировать первые поступления;
+while (Достигнут лимит генерации\nи система пуста?) is (нет)
+ :Взять ближайшее событие,
+t = event.time;
+ if (Тип события?) then (поступление)
+  |Движок модели|
+  :generate(t), ИБ, ИЗ2,
+интервал U(a,b);
+  |Движок модели|
+  :recordGenerated(r);
+  |Диспетчер постановки|
+  :accept(r,t), запросить findFree();
+  |Диспетчер выбора и пул|
+  :Поиск свободного узла по кольцу Д2П2;
+  if (Узел найден?) then (да)
+   :p = (i+1) mod M, assign(r,node,t);
+   |Вычислительный узел|
+   :start(r,t), длительность Exp(rate), ПЗ1;
+   |Движок модели|
+   :Добавить событие завершения в календарь;
+   |Движок модели|
+   :recordStart(r,node,t);
+  else (нет)
+   |Диспетчер постановки|
+   if (Буфер заполнен?) then (да)
+    |Буфер|
+    :replaceLatest(r,t), Д1ОО4,
+вытеснить max(enqueueOrder),
+новую заявку поместить в тот же слот;
+    |Движок модели|
+    :recordRejected(old,t)
+для источника вытесненной заявки;
+   else (нет)
+    |Буфер|
+    :putFirstFree(r,t), Д1ОЗ3,
+первый свободный слот от 0, без сдвига;
+   endif
+  endif
+  |Движок модели|
+  if (Лимит генерации достигнут?) then (да)
+   :Удалить будущие поступления,
+оставить события завершения;
+  else (нет)
+   :Запланировать следующее поступление
+этой камеры в t+U(a,b);
+  endif
+ else (завершение)
+  |Вычислительный узел|
+  :finish(t), освободить узел;
+  |Движок модели|
+  :recordCompleted(r,node,t);
+  |Диспетчер выбора и пул|
+  :dispatchWaiting(t);
+  while (Буфер не пуст?) is (да)
+   :findFreeRoundRobin(), Д2П2;
+   if (Свободный узел найден?) then (да)
+    :p=(i+1) mod M;
+    |Буфер|
+    :takeRoundRobin(), Д2Б3,
+поиск от q, извлечение из слота k,
+q=(k+1) mod B;
+    |Диспетчер выбора и пул|
+    :assign(r,node,t);
+    |Вычислительный узел|
+    :start(r,t), ПЗ1;
+    |Движок модели|
+    :Добавить SERVICE_COMPLETED в календарь;
+    |Движок модели|
+    :recordStart(r,node,t);
+    |Диспетчер выбора и пул|
+   else (нет)
+    :Завершить dispatchWaiting,
+ожидать события календаря;
+    break
+   endif
+  endwhile (нет)
+ endif
+ |Движок модели|
+ :Пошаговый режим — календарь,
+камеры, слоты, узлы, p, q и статистика;
+ |Движок модели|
+endwhile (да)
+|Движок модели|
+:ОР1 — сводная таблица источников
+и коэффициенты использования узлов;
+stop
+
+@enduml
